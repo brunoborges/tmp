@@ -331,7 +331,7 @@ class EventAnalyticsDashboard {
         }
         
         container.innerHTML = this.talksData.talks.map(talk => `
-            <div class="talk-card" onclick="dashboard.showTalkDetails('${talk.sessionID}')">
+            <div class="talk-card" data-session-id="${talk.sessionID}">
                 <div class="talk-header">
                     <div class="talk-title">${talk.title}</div>
                     <div class="talk-meta">
@@ -354,6 +354,9 @@ class EventAnalyticsDashboard {
                 </div>
             </div>
         `).join('');
+        
+        // Add event delegation for talk card clicks
+        this.setupTalkCardListeners();
     }
 
     renderPagination() {
@@ -372,7 +375,7 @@ class EventAnalyticsDashboard {
         // Previous button
         pagination += `
             <button ${currentPage === 1 ? 'disabled' : ''} 
-                    onclick="dashboard.changePage(${currentPage - 1})">
+                    data-page="${currentPage - 1}">
                 <i class="fas fa-chevron-left"></i>
             </button>
         `;
@@ -381,7 +384,7 @@ class EventAnalyticsDashboard {
         for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
             pagination += `
                 <button class="${i === currentPage ? 'active' : ''}" 
-                        onclick="dashboard.changePage(${i})">
+                        data-page="${i}">
                     ${i}
                 </button>
             `;
@@ -390,12 +393,13 @@ class EventAnalyticsDashboard {
         // Next button
         pagination += `
             <button ${currentPage === totalPages ? 'disabled' : ''} 
-                    onclick="dashboard.changePage(${currentPage + 1})">
+                    data-page="${currentPage + 1}">
                 <i class="fas fa-chevron-right"></i>
             </button>
         `;
         
         container.innerHTML = pagination;
+        this.setupPaginationListeners();
     }
 
     async showTalkDetails(sessionId) {
@@ -502,6 +506,55 @@ class EventAnalyticsDashboard {
                 this.closeTalkModal();
             }
         });
+        
+        // Modal close button
+        document.getElementById('modalCloseBtn').addEventListener('click', () => {
+            this.closeTalkModal();
+        });
+    }
+
+    setupTalkCardListeners() {
+        const talksGrid = document.getElementById('talksGrid');
+        
+        // Remove any existing listeners
+        if (this.handleTalkCardClick) {
+            talksGrid.removeEventListener('click', this.handleTalkCardClick);
+        }
+        
+        // Add event delegation for talk card clicks
+        this.handleTalkCardClick = (event) => {
+            const talkCard = event.target.closest('.talk-card');
+            if (talkCard) {
+                const sessionId = talkCard.getAttribute('data-session-id');
+                if (sessionId) {
+                    this.showTalkDetails(sessionId);
+                }
+            }
+        };
+        
+        talksGrid.addEventListener('click', this.handleTalkCardClick);
+    }
+
+    setupPaginationListeners() {
+        const pagination = document.getElementById('pagination');
+        
+        // Remove any existing listeners
+        if (this.handlePaginationClick) {
+            pagination.removeEventListener('click', this.handlePaginationClick);
+        }
+        
+        // Add event delegation for pagination clicks
+        this.handlePaginationClick = (event) => {
+            const button = event.target.closest('button');
+            if (button && !button.disabled && button.hasAttribute('data-page')) {
+                const page = parseInt(button.getAttribute('data-page'));
+                if (page > 0) {
+                    this.changePage(page);
+                }
+            }
+        };
+        
+        pagination.addEventListener('click', this.handlePaginationClick);
     }
 
     changePage(page) {
