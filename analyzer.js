@@ -171,41 +171,75 @@ class EventAnalyzer {
     getTopicAnalysis() {
         const words = {};
         const technologies = {};
+        const phrases = {};
+        
+        // Extended list of common words to filter out
         const commonWords = new Set([
-            'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'under', 'over', 'through',
+            'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'under', 'over',
             'a', 'an', 'this', 'that', 'these', 'those', 'will', 'be', 'are', 'is', 'was', 'were', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'can', 'could', 'should', 'would', 'may', 'might', 'must',
-            'how', 'what', 'when', 'where', 'why', 'who', 'which', 'your', 'our', 'their', 'its', 'his', 'her', 'my', 'we', 'you', 'they', 'it', 'he', 'she', 'i', 'me', 'us', 'them', 'him'
+            'how', 'what', 'when', 'where', 'why', 'who', 'which', 'your', 'our', 'their', 'its', 'his', 'her', 'my', 'we', 'you', 'they', 'it', 'he', 'she', 'i', 'me', 'us', 'them', 'him', 'get', 'out', 'all', 'any', 'if',
+            'use', 'using', 'used', 'new', 'more', 'most', 'see', 'learn', 'know', 'work', 'working', 'make', 'making', 'build', 'building', 'create', 'creating', 'help', 'helps', 'take', 'taking', 'come', 'comes',
+            'also', 'well', 'way', 'ways', 'time', 'times', 'first', 'session', 'level', 'join', 'explore', 'discover', 'understand', 'experience', 'gain', 'hands', 'lab', 'workshop', 'demo', 'introduction'
         ]);
 
+        // Enhanced technology keywords and key terms
         const techKeywords = [
-            'ai', 'artificial intelligence', 'machine learning', 'ml', 'llm', 'generative', 'kubernetes', 'openshift', 'red hat', 'cloud', 'hybrid', 'docker', 'container', 'microservices',
-            'api', 'rest', 'graphql', 'database', 'sql', 'nosql', 'mongodb', 'postgresql', 'automation', 'devops', 'cicd', 'pipeline', 'jenkins', 'ansible', 'terraform',
-            'security', 'cybersecurity', 'encryption', 'authentication', 'oauth', 'jwt', 'blockchain', 'iot', 'edge', 'serverless', 'function', 'lambda', 'power', 'mainframe',
-            'data', 'analytics', 'visualization', 'dashboard', 'monitoring', 'observability', 'performance', 'scaling', 'infrastructure', 'platform', 'saas', 'paas', 'iaas'
+            'watsonx', 'artificial intelligence', 'machine learning', 'generative ai', 'ai', 'ml', 'llm', 'large language model',
+            'kubernetes', 'openshift', 'red hat', 'cloud', 'hybrid cloud', 'multi cloud', 'docker', 'container', 'microservices',
+            'api', 'rest', 'graphql', 'database', 'sql', 'nosql', 'mongodb', 'postgresql', 'db2', 'data',
+            'automation', 'devops', 'ci cd', 'pipeline', 'jenkins', 'ansible', 'terraform', 'maximo',
+            'security', 'cybersecurity', 'encryption', 'authentication', 'oauth', 'jwt', 'blockchain',
+            'iot', 'edge', 'serverless', 'function', 'lambda', 'power', 'mainframe', 'aix', 'linux',
+            'analytics', 'visualization', 'dashboard', 'monitoring', 'observability', 'performance',
+            'scaling', 'infrastructure', 'platform', 'saas', 'paas', 'iaas', 'cognos', 'sterling',
+            'integration', 'webmethods', 'event', 'streaming', 'kafka', 'mq', 'queue', 'messaging'
         ];
 
         // Process titles and abstracts
         this.talks.forEach(talk => {
-            const text = `${talk.title || ''} ${this.cleanText(talk.abstract || '')}`.toLowerCase();
-            const words_array = text.split(/\\s+|[.,;:!?()\\[\\]{}\"'-]/);
+            const title = talk.title || '';
+            const abstract = this.cleanText(talk.abstract || '');
+            const fullText = `${title} ${abstract}`.toLowerCase();
             
-            words_array.forEach(word => {
+            // Extract meaningful phrases (2-3 words)
+            const phraseMatches = fullText.match(/\b[a-z]+(?:\s+[a-z]+){1,2}\b/g) || [];
+            phraseMatches.forEach(phrase => {
+                phrase = phrase.trim();
+                if (phrase.length > 5 && techKeywords.some(tech => phrase.includes(tech) || tech.includes(phrase))) {
+                    phrases[phrase] = (phrases[phrase] || 0) + 1;
+                }
+            });
+            
+            // Extract individual words - better regex
+            const wordMatches = fullText.match(/\b[a-z]{3,}\b/g) || [];
+            
+            wordMatches.forEach(word => {
                 word = word.trim();
-                if (word.length > 2 && !commonWords.has(word) && !/^\\d+$/.test(word)) {
+                
+                // Filter out common words, numbers, and very short words
+                if (word.length >= 3 && 
+                    !commonWords.has(word) && 
+                    !/^\d+$/.test(word) &&
+                    !/^(ibm|session|learn|demo|lab|workshop|presentation)$/i.test(word)) {
+                    
                     words[word] = (words[word] || 0) + 1;
                     
                     // Check if it's a technology keyword
-                    if (techKeywords.some(tech => word.includes(tech) || tech.includes(word))) {
+                    if (techKeywords.some(tech => 
+                        word.includes(tech.toLowerCase()) || 
+                        tech.toLowerCase().includes(word) ||
+                        word === tech.toLowerCase())) {
                         technologies[word] = (technologies[word] || 0) + 1;
                     }
                 }
             });
         });
 
-        // Get top words for word cloud
+        // Get top words for word cloud - prioritize meaningful terms
         const topWords = Object.entries(words)
+            .filter(([word, count]) => count >= 2) // Must appear at least twice
             .sort(([,a], [,b]) => b - a)
-            .slice(0, 100)
+            .slice(0, 80)
             .map(([word, count]) => ({ word, count }));
 
         const topTechnologies = Object.entries(technologies)
@@ -213,9 +247,16 @@ class EventAnalyzer {
             .slice(0, 50)
             .map(([tech, count]) => ({ tech, count }));
 
+        const topPhrases = Object.entries(phrases)
+            .filter(([phrase, count]) => count >= 2)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 30)
+            .map(([phrase, count]) => ({ phrase, count }));
+
         return {
             topWords,
             topTechnologies,
+            topPhrases,
             totalUniqueWords: Object.keys(words).length
         };
     }
