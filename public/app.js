@@ -235,21 +235,44 @@ class EventAnalyticsDashboard {
     }
 
     renderTimeSlots() {
-        const { byTimeSlot } = this.analyticsData.schedule;
+        const { byDay, parallelSessions } = this.analyticsData.schedule;
         const container = document.getElementById('timeSlots');
         
-        const sortedSlots = Object.entries(byTimeSlot)
-            .sort(([, a], [, b]) => b - a)
+        // Group time slots by day
+        const timeSlotsByDay = {};
+        
+        // Process parallel sessions to get time slots per day
+        Object.keys(parallelSessions).forEach(dayTimeKey => {
+            const [date, timeSlot] = dayTimeKey.split('_');
+            if (!timeSlotsByDay[date]) {
+                timeSlotsByDay[date] = new Set();
+            }
+            timeSlotsByDay[date].add(timeSlot);
+        });
+        
+        // Convert to array and sort by date, then get top days
+        const sortedDays = Object.entries(timeSlotsByDay)
+            .map(([date, timeSlots]) => ({
+                date: date,
+                timeSlotCount: timeSlots.size,
+                talkCount: byDay[date] || 0,
+                formattedDate: this.formatDate(date)
+            }))
+            .sort((a, b) => b.timeSlotCount - a.timeSlotCount)
             .slice(0, 10);
         
-        container.innerHTML = sortedSlots.map(([time, count]) => `
-            <div class="list-item">
+        container.innerHTML = sortedDays.map(day => `
+            <div class="list-item clickable-day" data-date="${day.date}" style="cursor: pointer;">
                 <div class="list-item-content">
-                    <div class="list-item-title">${time}</div>
+                    <div class="list-item-title">${day.formattedDate}</div>
+                    <div class="list-item-subtitle">${day.talkCount} talks</div>
                 </div>
-                <div class="list-item-count">${count}</div>
+                <div class="list-item-count">${day.timeSlotCount}</div>
             </div>
         `).join('');
+        
+        // Set up click listeners for days
+        this.setupDayClickListeners();
     }
 
     renderTopSpeakers() {
@@ -421,52 +444,118 @@ class EventAnalyticsDashboard {
         document.getElementById('modalTitle').textContent = talk.title;
         
         const modalBody = document.getElementById('modalBody');
+        modalBody.className = 'modal-body modal-scrollbar';
         modalBody.innerHTML = `
             <div class="talk-details">
+                <!-- Basic Information Section -->
                 <div class="detail-section">
                     <h4><i class="fas fa-info-circle"></i> Basic Information</h4>
-                    <p><strong>Code:</strong> ${talk.code}</p>
-                    <p><strong>Type:</strong> ${talk.type}</p>
-                    <p><strong>Language:</strong> ${talk.language || 'English'}</p>
-                    <p><strong>Duration:</strong> ${talk.length || 60} minutes</p>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Session Code</div>
+                            <div class="info-value">${talk.code}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Session Type</div>
+                            <div class="info-value">
+                                <span class="badge badge-primary">${talk.type}</span>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Language</div>
+                            <div class="info-value">${talk.language || 'English'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Duration</div>
+                            <div class="info-value">${talk.length || 60} minutes</div>
+                        </div>
+                    </div>
                 </div>
                 
                 ${talk.abstract ? `
                     <div class="detail-section">
-                        <h4><i class="fas fa-file-text"></i> Abstract</h4>
-                        <p>${this.cleanText(talk.abstract)}</p>
+                        <h4><i class="fas fa-file-text"></i> Session Abstract</h4>
+                        <div class="abstract-text">${this.cleanText(talk.abstract)}</div>
                     </div>
                 ` : ''}
                 
                 ${talk.participants && talk.participants.length > 0 ? `
                     <div class="detail-section">
-                        <h4><i class="fas fa-users"></i> Speakers</h4>
-                        ${talk.participants.map(p => `
-                            <div class="speaker-details">
-                                <h5>${p.fullName || p.globalFullName}</h5>
-                                <p><strong>Company:</strong> ${p.companyName || p.globalCompany || 'N/A'}</p>
-                                <p><strong>Title:</strong> ${p.jobTitle || p.globalJobtitle || 'N/A'}</p>
-                                ${p.bio || p.globalBio ? `<p><strong>Bio:</strong> ${this.cleanText(p.bio || p.globalBio)}</p>` : ''}
-                            </div>
-                        `).join('')}
+                        <h4><i class="fas fa-users"></i> Speakers (${talk.participants.length})</h4>
+                        <div class="detail-content">
+                            ${talk.participants.map(p => `
+                                <div class="speaker-card">
+                                    <div class="speaker-header">
+                                        <div class="speaker-avatar">
+                                            ${this.getInitials(p.fullName || p.globalFullName)}
+                                        </div>
+                                        <div class="speaker-info">
+                                            <h5>${p.fullName || p.globalFullName}</h5>
+                                            <p class="speaker-title">${p.jobTitle || p.globalJobtitle || 'Speaker'}</p>
+                                        </div>
+                                    </div>
+                                    <div class="speaker-details">
+                                        <div class="info-item">
+                                            <div class="info-label">Company</div>
+                                            <div class="info-value">${p.companyName || p.globalCompany || 'Not specified'}</div>
+                                        </div>
+                                    </div>
+                                    ${p.bio || p.globalBio ? `
+                                        <div class="speaker-bio">
+                                            ${this.cleanText(p.bio || p.globalBio)}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 ` : ''}
                 
                 ${talk.times && talk.times.length > 0 ? `
                     <div class="detail-section">
-                        <h4><i class="fas fa-calendar"></i> Schedule</h4>
-                        ${talk.times.map(time => `
-                            <div class="schedule-item">
-                                <p><strong>Date:</strong> ${this.formatDate(time.date)}</p>
-                                <p><strong>Time:</strong> ${time.startTimeFormatted || time.startTime} - ${time.endTimeFormatted || time.endTime}</p>
-                                <p><strong>Room:</strong> ${time.room || 'TBD'}</p>
-                                ${time.capacity ? `<p><strong>Capacity:</strong> ${time.capacity}</p>` : ''}
-                            </div>
-                        `).join('')}
+                        <h4><i class="fas fa-calendar"></i> Schedule & Location</h4>
+                        <div class="schedule-grid">
+                            ${talk.times.map(time => `
+                                <div class="schedule-card">
+                                    <div class="schedule-header">
+                                        <div class="schedule-icon">
+                                            <i class="fas fa-clock"></i>
+                                        </div>
+                                        <div class="schedule-time">
+                                            ${this.formatDate(time.date)}
+                                        </div>
+                                    </div>
+                                    <div class="schedule-details">
+                                        <div class="info-item">
+                                            <div class="info-label">Time</div>
+                                            <div class="info-value">${time.startTimeFormatted || time.startTime} - ${time.endTimeFormatted || time.endTime}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Room</div>
+                                            <div class="info-value">${time.room || 'TBD'}</div>
+                                        </div>
+                                        ${time.capacity ? `
+                                            <div class="info-item">
+                                                <div class="info-label">Capacity</div>
+                                                <div class="info-value">${time.capacity} attendees</div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 ` : ''}
             </div>
         `;
+    }
+
+    getInitials(name) {
+        if (!name) return '?';
+        return name.split(' ')
+            .map(word => word.charAt(0).toUpperCase())
+            .slice(0, 2)
+            .join('');
     }
 
     setupEventListeners() {
@@ -511,6 +600,25 @@ class EventAnalyticsDashboard {
         document.getElementById('modalCloseBtn').addEventListener('click', () => {
             this.closeTalkModal();
         });
+        
+        // Day details modal close events
+        const dayDetailsModal = document.getElementById('dayDetailsModal');
+        if (dayDetailsModal) {
+            // Modal close on outside click
+            dayDetailsModal.addEventListener('click', (e) => {
+                if (e.target.id === 'dayDetailsModal') {
+                    this.closeDayDetailsModal();
+                }
+            });
+            
+            // Modal close button
+            const dayModalCloseBtn = document.getElementById('dayModalCloseBtn');
+            if (dayModalCloseBtn) {
+                dayModalCloseBtn.addEventListener('click', () => {
+                    this.closeDayDetailsModal();
+                });
+            }
+        }
     }
 
     setupTalkCardListeners() {
@@ -555,6 +663,107 @@ class EventAnalyticsDashboard {
         };
         
         pagination.addEventListener('click', this.handlePaginationClick);
+    }
+
+    setupDayClickListeners() {
+        const timeSlotsContainer = document.getElementById('timeSlots');
+        
+        // Remove any existing listeners
+        if (this.handleDayClick) {
+            timeSlotsContainer.removeEventListener('click', this.handleDayClick);
+        }
+        
+        // Add event delegation for day clicks
+        this.handleDayClick = (event) => {
+            const dayItem = event.target.closest('.clickable-day');
+            if (dayItem) {
+                const date = dayItem.getAttribute('data-date');
+                if (date) {
+                    this.showDayDetails(date);
+                }
+            }
+        };
+        
+        timeSlotsContainer.addEventListener('click', this.handleDayClick);
+    }
+
+    showDayDetails(date) {
+        const { parallelSessions, byTimeSlot } = this.analyticsData.schedule;
+        
+        // Get all time slots for this specific day
+        const dayTimeSlots = {};
+        Object.keys(parallelSessions).forEach(dayTimeKey => {
+            const [dayDate, timeSlot] = dayTimeKey.split('_');
+            if (dayDate === date) {
+                dayTimeSlots[timeSlot] = parallelSessions[dayTimeKey];
+            }
+        });
+        
+        // Sort time slots by talk count
+        const sortedTimeSlots = Object.entries(dayTimeSlots)
+            .sort(([, a], [, b]) => b - a);
+        
+        const formattedDate = this.formatDate(date);
+        const totalTalks = Object.values(dayTimeSlots).reduce((sum, count) => sum + count, 0);
+        
+        this.renderDayDetailsModal(formattedDate, sortedTimeSlots, totalTalks);
+        document.getElementById('dayDetailsModal').style.display = 'block';
+    }
+
+    renderDayDetailsModal(formattedDate, timeSlots, totalTalks) {
+        document.getElementById('dayModalTitle').textContent = `${formattedDate} - Time Slots`;
+        
+        const modalBody = document.getElementById('dayModalBody');
+        modalBody.className = 'modal-body modal-scrollbar';
+        modalBody.innerHTML = `
+            <div class="day-details">
+                <div class="day-summary">
+                    <div class="summary-card">
+                        <h4><i class="fas fa-calendar-day"></i> Day Summary</h4>
+                        <div class="summary-stats">
+                            <div class="stat-item">
+                                <div class="stat-label">Total Time Slots</div>
+                                <div class="stat-value">${timeSlots.length}</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Total Talks</div>
+                                <div class="stat-value">${totalTalks}</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Avg Talks per Slot</div>
+                                <div class="stat-value">${timeSlots.length > 0 ? (totalTalks / timeSlots.length).toFixed(1) : 0}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeslots-breakdown">
+                    <h4><i class="fas fa-clock"></i> Time Slots Breakdown</h4>
+                    <div class="timeslots-grid">
+                        ${timeSlots.map(([timeSlot, talkCount]) => `
+                            <div class="timeslot-card">
+                                <div class="timeslot-header">
+                                    <div class="timeslot-time">
+                                        <i class="fas fa-clock"></i>
+                                        ${timeSlot}
+                                    </div>
+                                    <div class="timeslot-count">
+                                        ${talkCount} talk${talkCount !== 1 ? 's' : ''}
+                                    </div>
+                                </div>
+                                <div class="timeslot-bar">
+                                    <div class="timeslot-fill" style="width: ${(talkCount / Math.max(...timeSlots.map(([, count]) => count))) * 100}%"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    closeDayDetailsModal() {
+        document.getElementById('dayDetailsModal').style.display = 'none';
     }
 
     changePage(page) {
@@ -671,6 +880,10 @@ function refreshData() {
 
 function closeTalkModal() {
     dashboard.closeTalkModal();
+}
+
+function closeDayDetailsModal() {
+    dashboard.closeDayDetailsModal();
 }
 
 // Initialize dashboard when page loads
