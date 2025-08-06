@@ -1,5 +1,15 @@
 const fs = require('fs').promises;
 
+// Load profile ID from file
+let profileId;
+try {
+  profileId = (await fs.readFile('ibm.profileid', 'utf8')).trim();
+} catch (error) {
+  console.error('Error reading ibm.profileid file:', error.message);
+  console.error('Please ensure the ibm.profileid file exists and contains your profile ID.');
+  process.exit(1);
+}
+
 async function fetchPage(from = 0) {
   const baseBody = "search=&tab.sessioncatalogtabs=option_1601178495160&type=session&browserTimezone=America%2FVancouver&catalogDisplay=list";
   const body = from > 0 ? `${baseBody}&from=${from}` : baseBody;
@@ -9,8 +19,7 @@ async function fetchPage(from = 0) {
       "accept-language": "en-US,en-CA;q=0.9,en;q=0.8,pt-BR;q=0.7,pt;q=0.6,fr;q=0.5,fr-FR;q=0.4",
       "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
       "priority": "u=1, i",
-      "rfapiprofileid": "VPLNcfbNeUZHiTuuF2vVVNcE1irkpX92",
-      "rfwidgetid": "s7tRmNpO6e6B4fZXIsOoQtMz0G1L2q8N",
+      "rfapiprofileid": profileId,
       "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Microsoft Edge\";v=\"138\"",
       "sec-ch-ua-mobile": "?0",
       "sec-ch-ua-platform": "\"Windows\"",
